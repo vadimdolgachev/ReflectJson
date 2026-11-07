@@ -8,12 +8,12 @@ namespace {
     static_assert(PersonMeta::fields.size() == PersonMeta::properties.size());
     static_assert(PersonMeta::properties[0].name == "id");
     static_assert(PersonMeta::properties[1].name == "name");
-    static_assert(PersonMeta::properties[1].type == "std::string");
+    static_assert(PersonMeta::properties[1].typeName == "std::string");
     static_assert(PersonMeta::properties[2].name == "salary");
     static_assert(PersonMeta::properties[3].name == "values");
     static_assert(std::is_same_v<meta::MetaClass<const Person &>::Class, Person>);
     static_assert(meta::MetaClass<const Person &>::fieldCount == PersonMeta::fieldCount);
-    static_assert(meta::MetaClass<const Person &>::properties[1].type == "std::string");
+    static_assert(meta::MetaClass<const Person &>::properties[1].typeName == "std::string");
 
     struct Scalar { int value; };
     constexpr bool check_constexpr_visit() {

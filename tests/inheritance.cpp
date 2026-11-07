@@ -31,7 +31,7 @@ namespace {
     struct Employee final : Human { int id; double salary; };
     using EmployeeMeta = meta::MetaClass<Employee>;
     static_assert(EmployeeMeta::fieldCount == 3 && EmployeeMeta::fields.size() == 3);
-    static_assert(EmployeeMeta::properties[0].name == "name" && EmployeeMeta::properties[0].type == "std::string");
+    static_assert(EmployeeMeta::properties[0].name == "name" && EmployeeMeta::properties[0].typeName == "std::string");
     static_assert(EmployeeMeta::properties[1].name == "id" && EmployeeMeta::properties[2].name == "salary");
     static_assert(meta::MetaClass<const Employee &>::fieldCount == EmployeeMeta::fieldCount);
 

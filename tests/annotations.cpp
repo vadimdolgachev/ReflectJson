@@ -40,7 +40,7 @@ namespace {
     using Json = rj::detail::JsonMetaClass<Account>;
     static_assert(Raw::fieldCount == 3 && Raw::properties[0].name == "name" && Raw::properties[2].name == "password");
     static_assert(Json::fieldCount == 2 && Json::properties[0].name == "full_name");
-    static_assert(Json::properties[0].type == "std::string" && Json::ignoredNames[0] == "password");
+    static_assert(Json::properties[0].typeName == "std::string" && Json::ignoredNames[0] == "password");
 
     void checkBasic() {
         Account account{"Alice", 42, "secret-original"};

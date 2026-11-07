@@ -136,7 +136,7 @@ int main() {
         verify_metadata(person);
         verify_wide_integers();
         verify_writer(person, cases);
-        require(meta::MetaClass<Person>::properties[1].type == "std::string", "type name regression");
+        require(meta::MetaClass<Person>::properties[1].typeName == "std::string", "type name regression");
         require(rj::toJson(person) ==
                 "{\n  \"id\": 42,\n  \"name\": \"Alice\",\n  \"salary\": 5000.5,\n  \"values\": []\n}",
                 "Default formatting mismatch");

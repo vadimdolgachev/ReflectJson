@@ -12,7 +12,7 @@ int main() {
         || rj::toJson(rj::fromJson<Payload>(input), 0) != actual
         || rj::toJson(peer_read(actual), 0) != actual
         || peer_properties() != meta::MetaClass<Payload>::properties.data()
-        || meta::MetaClass<Payload>::properties[1].type != "std::string") {
+        || meta::MetaClass<Payload>::properties[1].typeName != "std::string") {
         std::cerr << "Public header, multi-TU or JSON conversion regression\n";
         return 1;
     }
