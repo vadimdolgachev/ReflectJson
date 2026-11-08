@@ -142,8 +142,8 @@ namespace rj {
                 }
                 size_t index = 0;
                 template for (constexpr auto field: JsonMetaClass<Value>::fields) {
-                    using Field = [:std::meta::type_of(field):];
-                    const auto &property = JsonMetaClass<Value>::properties[index++];
+                    using Field = [:std::meta::type_of(field.reflection):];
+                    const auto &property = field.property();
                     const auto found = remaining.find(property.name);
                     if (found == remaining.end()) {
                         if constexpr (!is_json_optional<std::remove_cvref_t<Field> >) {

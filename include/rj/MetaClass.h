@@ -9,6 +9,40 @@
 #include <vector>
 
 namespace meta {
+    struct MetaProperty final {
+        std::string_view name;
+        std::string_view typeName;
+    };
+
+    struct StaticStrView final {
+        const char *data;
+        size_t size;
+
+        [[nodiscard]] explicit constexpr operator std::string_view() const noexcept {
+            return {data, size};
+        }
+    };
+
+    consteval StaticStrView makeStrView(const std::string_view value) {
+        return {
+            .data = std::define_static_string(value),
+            .size = value.size()
+        };
+    }
+
+    struct MetaField final {
+        std::meta::info reflection;
+        StaticStrView name;
+        StaticStrView typeName;
+
+        [[nodiscard]] constexpr MetaProperty property() const noexcept {
+            return {
+                .name = static_cast<std::string_view>(name),
+                .typeName = static_cast<std::string_view>(typeName),
+            };
+        }
+    };
+
     namespace detail {
         consteval std::string_view typeName(const std::meta::info &type) {
             if (std::meta::is_same_type(type, ^^std::string)) {
@@ -18,7 +52,7 @@ namespace meta {
         }
 
         struct FieldSchema final {
-            std::span<const std::meta::info> fields;
+            std::span<const MetaField> fields;
             std::span<const std::meta::info> ignoredFields;
             std::string_view annotationError;
             bool isPublicBases = true;
@@ -77,7 +111,7 @@ namespace meta {
             std::vector<std::meta::info> collected;
             std::vector<std::meta::info> virtualBases;
             collectFields(type, context, collected, virtualBases, schema);
-            std::vector<std::meta::info> fields;
+            std::vector<MetaField> fields;
             std::vector<std::meta::info> ignored;
             std::vector<std::string_view> names;
             for (const auto field: collected) {
@@ -103,18 +137,17 @@ namespace meta {
                     }
                 }
                 names.push_back(projection.name);
-                fields.push_back(field);
+                fields.push_back({
+                    .reflection = field,
+                    .name = makeStrView(std::define_static_string(projection.name)),
+                    .typeName = makeStrView(std::define_static_string(typeName(std::meta::type_of(field))))
+                });
             }
             schema.fields = std::define_static_array(fields);
             schema.ignoredFields = std::define_static_array(ignored);
             return schema;
         }
     }
-
-    struct MetaProperty final {
-        std::string_view name;
-        std::string_view typeName;
-    };
 
     template<typename T, typename FieldPolicy = detail::FullFieldPolicy>
     struct MetaClass final {
@@ -151,27 +184,13 @@ namespace meta {
             return result;
         }();
 
-        static constexpr auto properties = [] {
-            std::array<MetaProperty, fieldCount> result{};
-            [[maybe_unused]] size_t index = 0;
-            if constexpr (isValidSchema) {
-                template for (constexpr auto field: fields) {
-                    result[index++] = MetaProperty{
-                        .name = FieldPolicy::project(field).name,
-                        .typeName = detail::typeName(std::meta::type_of(field))
-                    };
-                }
-            }
-
-            return result;
-        }();
-
         template<typename Visitor>
         static constexpr void forEach(const Class &obj, Visitor &&visitor) {
             [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
-                    visitor(properties[index++], obj.[:field:]);
+                    constexpr auto property = field.property();
+                    visitor(property, obj.[:field.reflection:]);
                 }
             }
         }
@@ -181,17 +200,19 @@ namespace meta {
             [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
-                    constexpr auto type = std::meta::type_of(field);
+                    constexpr auto reflection = field.reflection;
+                    constexpr auto type = std::meta::type_of(reflection);
                     static_assert(!std::meta::is_reference_type(type),
                                   "MetaClass mutable traversal does not support reference members");
                     static_assert(!std::meta::is_const_type(type),
                                   "MetaClass mutable traversal does not support const members");
-                    static_assert(!std::meta::is_bit_field(field),
+                    static_assert(!std::meta::is_bit_field(reflection),
                                   "MetaClass mutable traversal does not support bitfields");
                     if constexpr (!std::meta::is_reference_type(type)
                                   && !std::meta::is_const_type(type)
-                                  && !std::meta::is_bit_field(field)) {
-                        visitor(properties[index++], obj.[:field:]);
+                                  && !std::meta::is_bit_field(reflection)) {
+                        constexpr auto property = field.property();
+                        visitor(property, obj.[:field.reflection:]);
                     }
                 }
             }
