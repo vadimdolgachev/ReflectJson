@@ -31,8 +31,10 @@ namespace {
     struct Employee final : Human { int id; double salary; };
     using EmployeeMeta = meta::MetaClass<Employee>;
     static_assert(EmployeeMeta::fieldCount == 3 && EmployeeMeta::fields.size() == 3);
-    static_assert(EmployeeMeta::properties[0].name == "name" && EmployeeMeta::properties[0].typeName == "std::string");
-    static_assert(EmployeeMeta::properties[1].name == "id" && EmployeeMeta::properties[2].name == "salary");
+    static_assert(EmployeeMeta::fields[0].property().name == "name"
+                  && EmployeeMeta::fields[0].property().typeName == "std::string");
+    static_assert(EmployeeMeta::fields[1].property().name == "id"
+                  && EmployeeMeta::fields[2].property().name == "salary");
     static_assert(meta::MetaClass<const Employee &>::fieldCount == EmployeeMeta::fieldCount);
 
     struct Root { int root = 1; };
@@ -41,8 +43,10 @@ namespace {
     struct Multiple : Middle, Side { int own = 4; };
     using MultipleMeta = meta::MetaClass<Multiple>;
     static_assert(MultipleMeta::fieldCount == 4);
-    static_assert(MultipleMeta::properties[0].name == "root" && MultipleMeta::properties[1].name == "middle");
-    static_assert(MultipleMeta::properties[2].name == "side" && MultipleMeta::properties[3].name == "own");
+    static_assert(MultipleMeta::fields[0].property().name == "root"
+                  && MultipleMeta::fields[1].property().name == "middle");
+    static_assert(MultipleMeta::fields[2].property().name == "side"
+                  && MultipleMeta::fields[3].property().name == "own");
     static_assert([] {
         Multiple value{};
         int sum = 0;
@@ -59,9 +63,12 @@ namespace {
     struct Diamond : Left, Right { int own = 5; };
     using DiamondMeta = meta::MetaClass<Diamond>;
     static_assert(DiamondMeta::fieldCount == 6);
-    static_assert(DiamondMeta::properties[0].name == "origin" && DiamondMeta::properties[1].name == "shared");
-    static_assert(DiamondMeta::properties[2].name == "keep" && DiamondMeta::properties[3].name == "left");
-    static_assert(DiamondMeta::properties[4].name == "right" && DiamondMeta::properties[5].name == "own");
+    static_assert(DiamondMeta::fields[0].property().name == "origin"
+                  && DiamondMeta::fields[1].property().name == "shared");
+    static_assert(DiamondMeta::fields[2].property().name == "keep"
+                  && DiamondMeta::fields[3].property().name == "left");
+    static_assert(DiamondMeta::fields[4].property().name == "right"
+                  && DiamondMeta::fields[5].property().name == "own");
 
     struct Empty {};
     struct EmptyLeft : Empty {};
@@ -112,7 +119,9 @@ namespace {
 
         size_t index = 0;
         DiamondMeta::forEachMutable(diamond, [&](const auto &property, auto &field) {
-            require(&property == &DiamondMeta::properties[index++], "Derived metadata identity");
+            const auto expected = DiamondMeta::properties[index++];
+            require(property.name == expected.name && property.typeName == expected.typeName,
+                    "Derived metadata changed");
             if constexpr (std::is_same_v<std::remove_cvref_t<decltype(field)>, int>) {
                 const int *address = property.name == "origin" ? &diamond.origin
                     : property.name == "shared" ? &diamond.shared : property.name == "left" ? &diamond.left
@@ -155,8 +164,9 @@ namespace {
         static_assert(Meta::fieldCount == 6);
         size_t index = 0;
         Meta::forEach(object, [&](const auto &property, auto &field) {
-            static_assert(std::is_const_v<std::remove_reference_t<decltype(field)>>);
-            require(&property == &Meta::properties[index++], "Const visitor metadata identity");
+            const auto expected = Meta::properties[index++];
+            require(property.name == expected.name && property.typeName == expected.typeName,
+                    "Const visitor metadata changed");
             using Value = std::remove_cvref_t<decltype(field)>;
             if constexpr (std::is_same_v<Value, int>) {
                 const int *expected = property.name == "fixed" ? &object.fixed

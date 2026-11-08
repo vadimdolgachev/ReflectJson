@@ -5,15 +5,15 @@
 namespace {
     using PersonMeta = meta::MetaClass<Person>;
     static_assert(PersonMeta::fieldCount == 4);
-    static_assert(PersonMeta::fields.size() == PersonMeta::properties.size());
-    static_assert(PersonMeta::properties[0].name == "id");
-    static_assert(PersonMeta::properties[1].name == "name");
-    static_assert(PersonMeta::properties[1].typeName == "std::string");
-    static_assert(PersonMeta::properties[2].name == "salary");
-    static_assert(PersonMeta::properties[3].name == "values");
+    static_assert(PersonMeta::fields.size() == PersonMeta::fieldCount);
+    static_assert(PersonMeta::fields[0].property().name == "id");
+    static_assert(PersonMeta::fields[1].property().name == "name");
+    static_assert(PersonMeta::fields[1].property().typeName == "std::string");
+    static_assert(PersonMeta::fields[2].property().name == "salary");
+    static_assert(PersonMeta::fields[3].property().name == "values");
     static_assert(std::is_same_v<meta::MetaClass<const Person &>::Class, Person>);
     static_assert(meta::MetaClass<const Person &>::fieldCount == PersonMeta::fieldCount);
-    static_assert(meta::MetaClass<const Person &>::properties[1].typeName == "std::string");
+    static_assert(meta::MetaClass<const Person &>::fields[1].property().typeName == "std::string");
 
     struct Scalar { int value; };
     constexpr bool check_constexpr_visit() {
@@ -29,7 +29,7 @@ namespace {
     }
     static_assert(check_constexpr_visit());
     static_assert(meta::MetaClass<Empty>::fieldCount == 0);
-    static_assert(meta::MetaClass<Empty>::properties.empty());
+    static_assert(meta::MetaClass<Empty>::fields.empty());
 
     struct NonCopyable {
         int value = 17;
@@ -64,8 +64,9 @@ namespace {
             } else if constexpr (std::is_same_v<Value, double>) {
                 require(&value == &person.salary, "Double field was copied");
             }
-            require(&property == &PersonMeta::properties[names.size()],
-                    "Visitor did not receive the cached property");
+            const auto &expected = PersonMeta::properties[names.size()];
+            require(property.name == expected.name && property.typeName == expected.typeName,
+                    "Visitor received incorrect property metadata");
             names.push_back(property.name);
         });
         require(names == std::vector<std::string_view>{"id", "name", "salary", "values"},

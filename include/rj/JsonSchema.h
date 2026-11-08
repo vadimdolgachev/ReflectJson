@@ -53,7 +53,7 @@ namespace rj {
                 writer.beginObject("properties");
                 size_t index = 0;
                 template for (constexpr auto field: Meta::fields) {
-                    using Field = [:std::meta::type_of(field):];
+                    using Field = [:std::meta::type_of(field.reflection):];
                     writer.beginObject(Meta::properties[index++].name);
                     writeSchemaBody<Field>(writer);
                     writer.endObject();
@@ -62,7 +62,7 @@ namespace rj {
                 writer.beginArray("required");
                 index = 0;
                 template for (constexpr auto field: Meta::fields) {
-                    using FieldType = [:std::meta::type_of(field):];
+                    using FieldType = [:std::meta::type_of(field.reflection):];
                     using Field = std::remove_cvref_t<FieldType>;
                     if constexpr (!is_json_optional<Field>) {
                         writer.write(Meta::properties[index].name);

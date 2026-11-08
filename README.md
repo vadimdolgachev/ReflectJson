@@ -62,6 +62,11 @@ before constructing the result. Field annotations `rj::rename` and `rj::ignore` 
 JSON names and participation. Non-optional fields are required; missing optionals retain
 their defaults. Unknown and duplicate keys are rejected.
 
+`rj::mergePatch(input, value)` applies a JSON Merge Patch to an existing value. Missing fields
+remain unchanged, nested objects are patched recursively, and arrays are replaced as whole
+values. `null` clears `std::optional`; it is rejected for non-optional fields. Unknown fields
+are rejected, and validation finishes before the target is modified.
+
 ## CMake integration
 
 ```cmake

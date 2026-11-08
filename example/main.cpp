@@ -21,7 +21,10 @@ namespace {
 
 int main() {
     std::stringstream stream(R"({"id": 42, "first_name": "Alice", "salary": 5000.5})");
-    rj::toJson(rj::fromJson<Employee>(stream), std::cout);
+    auto employee = rj::fromJson<Employee>(stream);
+    std::stringstream stream2(R"({"id": 43})");
+    rj::mergePatch(stream2, employee);
+    rj::toJson(employee, std::cout);
     std::cout << '\n';
     return 0;
 }

@@ -23,18 +23,6 @@ namespace rj::detail {
     using JsonElements = std::vector<JsonValue>;
     using JsonMembers = std::vector<JsonMember>;
 
-    template<typename T, typename Variant>
-    struct is_variant_alternative : std::false_type {
-    };
-
-    template<typename T, typename... Types>
-    struct is_variant_alternative<T, std::variant<Types...> >
-            : std::bool_constant<(std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<Types> > || ...)> {
-    };
-
-    template<typename T, typename Variant>
-    inline constexpr bool is_variant_alternative_v = is_variant_alternative<T, Variant>::value;
-
     struct JsonValue final {
     private:
         using Variant = std::variant<

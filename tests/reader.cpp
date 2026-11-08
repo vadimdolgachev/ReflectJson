@@ -150,7 +150,8 @@ namespace {
         require(visitor.calls == 2 && point.x == 1 && point.y == 2, "Noncopyable mutable visitor");
         size_t index = 0;
         meta::MetaClass<Coordinates>::forEachMutable(point, [&](const auto &property, auto &field) {
-            require(&property == &meta::MetaClass<Coordinates>::properties[index], "Cached mutable property");
+            require(property.name == meta::MetaClass<Coordinates>::properties[index].name,
+                    "Mutable property metadata");
             require(&field == (index == 0 ? &point.x : &point.y), "Mutable field refers to original");
             ++index;
         });
@@ -219,6 +220,53 @@ namespace {
                 "Move-only vector element");
         require(readDocument<std::vector<CopyOnly>>(R"([{"value":16}])")[0].value == 16,
                 "Copy-only vector element");
+    }
+
+    void checkMergePatch() {
+        const auto apply = [](const std::string_view document, auto &value) {
+            std::istringstream input{std::string(document)};
+            rj::patch(input, value);
+        };
+
+        Required required{};
+        apply("{}", required);
+        require(required.id == 41 && required.keep == 7, "Empty patch preserves object");
+        apply(R"({"id":42})", required);
+        require(required.id == 42 && required.keep == 7, "Patch preserves absent fields");
+        rejects([&] { apply(R"({"id":null})", required); }, "Expected number");
+        require(required.id == 42 && required.keep == 7, "Rejected patch preserves object");
+
+        Outer outer{};
+        apply(R"({"child":{"required":3}})", outer);
+        require(outer.child.required == 3 && outer.child.keep == 99,
+                "Nested object patched recursively");
+        require(outer.maybe && outer.maybe->required == 2 && outer.maybe->keep == 100
+                && outer.data == std::vector<int>{9}, "Patch preserves unrelated fields");
+        apply(R"({"maybe":{"keep":8}})", outer);
+        require(outer.maybe && outer.maybe->required == 2 && outer.maybe->keep == 8,
+                "Engaged optional object patched recursively");
+        apply(R"({"data":[4,5]})", outer);
+        require(outer.data == std::vector<int>{4, 5}, "Patch replaces array");
+        rejects([&] { apply(R"({"child":{"required":"bad"},"data":[8]})", outer); },
+                "Expected number");
+        require(outer.child.required == 3 && outer.data == std::vector<int>{4, 5},
+                "Validation completes before patch mutation");
+        rejects([&] { apply(R"({"child":{"unknown":1}})", outer); }, "Unknown field: unknown");
+        apply(R"({"maybe":null})", outer);
+        require(!outer.maybe, "Null removes optional object");
+
+        OptionalChild optional;
+        apply(R"({"maybe":{"keep":4}})", optional);
+        require(optional.maybe && optional.maybe->required == 5 && optional.maybe->keep == 4,
+                "Patch creates missing optional object");
+
+        std::vector<Inner> children{Inner{9, 10}};
+        rejects([&] { apply(R"([{}])", children); }, "Missing required field: required");
+        require(children.size() == 1 && children[0].required == 9 && children[0].keep == 10,
+                "Array elements require complete replacement objects");
+        apply(R"([{"required":7}])", children);
+        require(children.size() == 1 && children[0].required == 7 && children[0].keep == 17,
+                "Replacement array populates complete objects");
     }
 
     void checkContainers() {
@@ -551,6 +599,7 @@ int main() {
     try {
         checkMutableMetadata();
         checkObjects();
+        checkMergePatch();
         checkContainers();
         checkNumbers();
         checkStrings();

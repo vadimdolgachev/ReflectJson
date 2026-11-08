@@ -139,8 +139,8 @@ namespace meta {
                 names.push_back(projection.name);
                 fields.push_back({
                     .reflection = field,
-                    .name = makeStrView(std::define_static_string(projection.name)),
-                    .typeName = makeStrView(std::define_static_string(typeName(std::meta::type_of(field))))
+                    .name = makeStrView(projection.name),
+                    .typeName = makeStrView(typeName(std::meta::type_of(field)))
                 });
             }
             schema.fields = std::define_static_array(fields);
@@ -175,6 +175,17 @@ namespace meta {
         static constexpr auto fields = schema.fields;
         static constexpr size_t fieldCount = fields.size();
 
+        static constexpr auto properties = [] {
+            std::array<MetaProperty, fieldCount> result{};
+            [[maybe_unused]] size_t index = 0;
+            if constexpr (isValidSchema) {
+                template for (constexpr auto field: fields) {
+                    result[index++] = field.property();
+                }
+            }
+            return result;
+        }();
+
         static constexpr auto ignoredNames = [] {
             std::array<std::string_view, schema.ignoredFields.size()> result{};
             [[maybe_unused]] size_t index = 0;
@@ -189,8 +200,7 @@ namespace meta {
             [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
-                    constexpr auto property = field.property();
-                    visitor(property, obj.[:field.reflection:]);
+                    visitor(properties[index++], obj.[:field.reflection:]);
                 }
             }
         }
@@ -211,8 +221,7 @@ namespace meta {
                     if constexpr (!std::meta::is_reference_type(type)
                                   && !std::meta::is_const_type(type)
                                   && !std::meta::is_bit_field(reflection)) {
-                        constexpr auto property = field.property();
-                        visitor(property, obj.[:field.reflection:]);
+                        visitor(properties[index++], obj.[:field.reflection:]);
                     }
                 }
             }

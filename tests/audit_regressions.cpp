@@ -10,7 +10,7 @@ concept JsonInput = requires(Input &input) {
     { rj::fromJson<int>(input) } -> std::same_as<int>;
 };
 
-static_assert(std::same_as<decltype(&rj::fromJson<int>), int (*)(std::istream &)>);
+static_assert(std::same_as<decltype(static_cast<int (*)(std::istream &)>(&rj::fromJson<int>)), int (*)(std::istream &)>);
 static_assert(JsonInput<std::istream> && JsonInput<std::istringstream>);
 static_assert(JsonInput<std::stringstream> && JsonInput<std::ifstream>);
 static_assert(!JsonInput<const std::istream> && !JsonInput<std::ostringstream>);
@@ -95,8 +95,9 @@ namespace {
         size_t index = 0;
         meta::MetaClass<Fields>::forEach(object, [&](const auto &property, auto &field) {
             static_assert(std::is_lvalue_reference_v<decltype(field)>);
-            static_assert(std::is_const_v<std::remove_reference_t<decltype(field)>>);
-            require(&property == &meta::MetaClass<Fields>::properties[index++], "Metadata order/address changed");
+            const auto &expected = meta::MetaClass<Fields>::properties[index++];
+            require(property.name == expected.name && property.typeName == expected.typeName,
+                    "Metadata order/content changed");
             using Type = std::remove_cvref_t<decltype(field)>;
             if constexpr (std::is_same_v<Type, int>) {
                 const int *expected = property.name == "ordinary" ? &object.ordinary

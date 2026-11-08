@@ -38,9 +38,10 @@ namespace {
     };
     using Raw = meta::MetaClass<Account>;
     using Json = rj::detail::JsonMetaClass<Account>;
-    static_assert(Raw::fieldCount == 3 && Raw::properties[0].name == "name" && Raw::properties[2].name == "password");
-    static_assert(Json::fieldCount == 2 && Json::properties[0].name == "full_name");
-    static_assert(Json::properties[0].typeName == "std::string" && Json::ignoredNames[0] == "password");
+    static_assert(Raw::fieldCount == 3 && Raw::fields[0].property().name == "name"
+                  && Raw::fields[2].property().name == "password");
+    static_assert(Json::fieldCount == 2 && Json::fields[0].property().name == "full_name");
+    static_assert(Json::fields[0].property().typeName == "std::string" && Json::ignoredNames[0] == "password");
 
     void checkBasic() {
         Account account{"Alice", 42, "secret-original"};
@@ -60,7 +61,9 @@ namespace {
         rejects<Account>(R"({"id":42,"full_name":"Alice","other":1})", "Unknown field: other");
         size_t index = 0;
         Raw::forEach(account, [&](const auto &property, const auto &value) {
-            require(&property == &Raw::properties[index++], "Raw property identity changed");
+            const auto &expected = Raw::properties[index++];
+            require(property.name == expected.name && property.typeName == expected.typeName,
+                    "Raw property metadata changed");
             if constexpr (std::is_same_v<std::remove_cvref_t<decltype(value)>, std::string>) {
                 if (property.name == "password") { require(&value == &account.password, "Raw visitor skipped ignored field"); }
             }
