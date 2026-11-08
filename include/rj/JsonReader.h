@@ -86,7 +86,7 @@ namespace rj {
             }
         }
 
-        template<typename T, bool PatchMode = false>
+        template<typename T, bool MergePatchMode = false>
         void validateJson(const JsonValue &json) {
             using Value = std::remove_cv_t<T>;
             static_assert(!std::is_const_v<T>, "JsonReader does not support const targets");
@@ -108,7 +108,7 @@ namespace rj {
                 static_assert(false, "JsonReader does not support std::string_view targets");
             } else if constexpr (is_json_optional<Value>) {
                 if (json.getKind() != JsonKind::Null) {
-                    detail::validateJson<typename Value::value_type, PatchMode>(json);
+                    detail::validateJson<typename Value::value_type, MergePatchMode>(json);
                 }
             } else if constexpr (is_json_array<Value>) {
                 if (json.getKind() != JsonKind::Array) {
@@ -146,11 +146,11 @@ namespace rj {
                     const auto &property = JsonMetaClass<Value>::properties[index++];
                     const auto found = remaining.find(property.name);
                     if (found == remaining.end()) {
-                        if constexpr (!is_json_optional<std::remove_cvref_t<Field> > && !PatchMode) {
+                        if constexpr (!is_json_optional<std::remove_cvref_t<Field> > && !MergePatchMode) {
                             throw JsonError("Missing required field: " + std::string(property.name));
                         }
                     } else {
-                        detail::validateJson<Field, PatchMode>(found->second->value);
+                        detail::validateJson<Field, MergePatchMode>(found->second->value);
                         remaining.erase(found);
                     }
                 }

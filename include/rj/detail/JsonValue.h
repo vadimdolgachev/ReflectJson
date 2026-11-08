@@ -54,20 +54,24 @@ namespace rj::detail {
             return static_cast<JsonKind>(value.index());
         }
 
-        [[nodiscard]] bool asBool() const {
-            return std::get<bool>(value);
+        template<typename Self>
+        [[nodiscard]] decltype(auto) asBool(this Self &&self) {
+            return std::get<bool>(std::forward<Self>(self).value);
         }
 
-        [[nodiscard]] int64_t asInt64() const {
-            return std::get<int64_t>(value);
+        template<typename Self>
+        [[nodiscard]] decltype(auto) asInt64(this Self &&self) {
+            return std::get<int64_t>(std::forward<Self>(self).value);
         }
 
-        [[nodiscard]] uint64_t asUInt64() const {
-            return std::get<uint64_t>(value);
+        template<typename Self>
+        [[nodiscard]] decltype(auto) asUInt64(this Self &&self) {
+            return std::get<uint64_t>(std::forward<Self>(self).value);
         }
 
-        [[nodiscard]] double asDouble() const {
-            return std::get<double>(value);
+        template<typename Self>
+        [[nodiscard]] decltype(auto) asDouble(this Self &&self) {
+            return std::get<double>(std::forward<Self>(self).value);
         }
 
         template<typename Self>
