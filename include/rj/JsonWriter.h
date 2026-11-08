@@ -178,6 +178,12 @@ namespace rj {
                     }
                 );
                 endObject();
+            } else if constexpr (std::is_enum_v<ValueT>) {
+                if (const auto text = meta::MetaEnum<ValueT>::toString(value)) {
+                    writeString(*text);
+                } else {
+                    throw std::domain_error("JsonWriter: Enum not found");
+                }
             } else {
                 static_assert(false, "JsonWriter: unsupported type");
             }

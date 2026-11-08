@@ -162,6 +162,13 @@ namespace rj {
                         throw JsonError("Unknown field: " + name);
                     }
                 }
+            } else if constexpr (std::is_enum_v<Value>) {
+                if (json.getKind() != JsonKind::String) {
+                    throw JsonError("Expected string");
+                }
+                if (!meta::MetaEnum<Value>::fromString(json.asString())) {
+                    throw JsonError("Enum not found: " + json.asString());
+                }
             } else {
                 static_assert(false, "JsonReader: unsupported type");
             }
@@ -227,6 +234,12 @@ namespace rj {
                         detail::populateValue(std::forward<Json>(found->second->value), field);
                     }
                 });
+            } else if constexpr (std::is_enum_v<Value>) {
+                if (const auto parsed = meta::MetaEnum<Value>::fromString(json.asString())) {
+                    value = *parsed;
+                } else {
+                    throw JsonError("Unknown enum value: " + json.asString());
+                }
             } else {
                 static_assert(false, "JsonReader: unsupported type");
             }

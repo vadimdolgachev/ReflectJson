@@ -46,7 +46,7 @@ namespace {
 
     struct ValidationProbe {
         static size_t constructions;
-        int id;
+        int id = 0;
         ValidationProbe() { ++constructions; }
     };
 
@@ -225,7 +225,7 @@ namespace {
     void checkMergePatch() {
         const auto apply = [](const std::string_view document, auto &value) {
             std::istringstream input{std::string(document)};
-            rj::patch(input, value);
+            rj::mergePatch(input, value);
         };
 
         Required required{};

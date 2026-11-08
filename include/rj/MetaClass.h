@@ -2,6 +2,7 @@
 
 #include <array>
 #include <meta>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -148,6 +149,43 @@ namespace meta {
             return schema;
         }
     }
+
+    template<typename T>
+    struct MetaEnum final {
+        using Enum = std::remove_cvref_t<T>;
+        static_assert(std::is_enum_v<Enum>, "MetaEnum requires an enum type");
+
+        static constexpr auto enumerators = std::define_static_array(
+            std::meta::enumerators_of(^^Enum)
+        );
+
+        static constexpr auto properties = [] {
+            std::array<std::string_view, enumerators.size()> result{};
+            std::size_t index = 0;
+            template for (constexpr auto enumerator: enumerators) {
+                result[index++] = std::meta::identifier_of(enumerator);
+            }
+            return result;
+        }();
+
+        [[nodiscard]] static constexpr std::optional<Enum> fromString([[maybe_unused]] std::string_view name) noexcept {
+            template for (constexpr auto entity: enumerators) {
+                if (name == std::meta::identifier_of(entity)) {
+                    return [:entity:];
+                }
+            }
+            return std::nullopt;
+        }
+
+        [[nodiscard]] static constexpr std::optional<std::string_view> toString([[maybe_unused]] Enum value) noexcept {
+            template for (constexpr auto entity: enumerators) {
+                if (value == [:entity:]) {
+                    return std::meta::identifier_of(entity);
+                }
+            }
+            return std::nullopt;
+        }
+    };
 
     template<typename T, typename FieldPolicy = detail::FullFieldPolicy>
     struct MetaClass final {

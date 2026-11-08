@@ -70,6 +70,26 @@ namespace rj {
                     ++index;
                 }
                 writer.endArray();
+            } else if constexpr (std::is_enum_v<Value>) {
+                using Meta = meta::MetaEnum<Value>;
+                if constexpr (Meta::enumerators.empty()) {
+                    if (nullable) {
+                        writeSchemaType(writer, "null", false);
+                    } else {
+                        writer.beginObject("not");
+                        writer.endObject();
+                    }
+                } else {
+                    writeSchemaType(writer, "string", nullable);
+                    writer.beginArray("enum");
+                    for (const auto name: Meta::properties) {
+                        writer.write(name);
+                    }
+                    if (nullable) {
+                        writer.write(nullptr);
+                    }
+                    writer.endArray();
+                }
             } else {
                 static_assert(false, "JsonSchema: unsupported type");
             }
