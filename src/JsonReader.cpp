@@ -331,15 +331,13 @@ namespace rj::detail {
                     double number = 0;
                     const auto [ptr, error] = std::from_chars(begin, end, number);
                     if (error == std::errc::result_out_of_range && isUnderflow(text)) {
-                        value.kind = JsonKind::Double;
-                        value.floatingNumber = text.front() == '-' ? -0.0 : 0.0;
+                        value.setValue(text.front() == '-' ? -0.0 : 0.0);
                         return value;
                     }
                     if (error != std::errc{} || ptr != end || !std::isfinite(number)) {
                         fail("Floating-point number out of range");
                     }
-                    value.kind = JsonKind::Double;
-                    value.floatingNumber = number;
+                    value.setValue(number);
                     return value;
                 }
                 if (text.front() == '-') {
@@ -348,8 +346,7 @@ namespace rj::detail {
                         error != std::errc{} || ptr != end) {
                         fail("Integer out of range");
                     }
-                    value.kind = JsonKind::Int64;
-                    value.signedNumber = number;
+                    value.setValue(number);
                     return value;
                 }
                 uint64_t number = 0;
@@ -358,11 +355,9 @@ namespace rj::detail {
                     fail("Integer out of range");
                 }
                 if (number <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-                    value.kind = JsonKind::Int64;
-                    value.signedNumber = static_cast<int64_t>(number);
+                    value.setValue(static_cast<int64_t>(number));
                 } else {
-                    value.kind = JsonKind::UInt64;
-                    value.unsignedNumber = number;
+                    value.setValue(number);
                 }
                 return value;
             }
@@ -381,11 +376,11 @@ namespace rj::detail {
                     ++position;
                     skipWhitespace();
                     if (ch == '{') {
-                        value.kind = JsonKind::Object;
-                        std::unordered_set<std::string> names;
+                        value.setValue(JsonMembers{});
                         if (consume('}')) {
                             return value;
                         }
+                        std::unordered_set<std::string> names;
                         do {
                             skipWhitespace();
                             auto name = parseString();
@@ -395,7 +390,10 @@ namespace rj::detail {
                             skipWhitespace();
                             expect(':');
                             auto member = parseValue(depth + 1);
-                            value.members.push_back({std::move(name), std::move(member)});
+                            value.asMembers().push_back({
+                                .name = std::move(name),
+                                .value = std::move(member)
+                            });
                             skipWhitespace();
                             if (consume('}')) {
                                 return value;
@@ -403,12 +401,12 @@ namespace rj::detail {
                             expect(',');
                         } while (true);
                     }
-                    value.kind = JsonKind::Array;
+                    value.setValue(JsonElements{});
                     if (consume(']')) {
                         return value;
                     }
                     do {
-                        value.elements.push_back(parseValue(depth + 1));
+                        value.asArray().push_back(parseValue(depth + 1));
                         skipWhitespace();
                         if (consume(']')) {
                             return value;
@@ -417,14 +415,12 @@ namespace rj::detail {
                     } while (true);
                 }
                 if (ch == '"') {
-                    value.kind = JsonKind::String;
-                    value.text = parseString();
+                    value.setValue(parseString());
                 } else if (ch == 't' || ch == 'f') {
-                    value.kind = JsonKind::Boolean;
-                    value.boolean = ch == 't';
-                    literal(value.boolean ? "true" : "false");
+                    bool bv = ch == 't';
+                    literal(bv ? "true" : "false");
+                    value.setValue(bv);
                 } else if (ch == 'n') {
-                    value.kind = JsonKind::Null;
                     literal("null");
                 } else if (ch == '-' || isDigit(ch)) {
                     return parseNumber();
@@ -492,5 +488,18 @@ namespace rj::detail {
             throw JsonError("Floating-point number out of range for target type");
         }
         return result;
+    }
+
+    double numberAsDouble(const JsonValue &value) {
+        switch (value.getKind()) {
+            case JsonKind::Int64:
+                return static_cast<double>(value.asInt64());
+            case JsonKind::UInt64:
+                return static_cast<double>(value.asUInt64());
+            case JsonKind::Double:
+                return value.asDouble();
+            default:
+                throw JsonError("Expected number");
+        }
     }
 }

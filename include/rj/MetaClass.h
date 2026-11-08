@@ -69,7 +69,7 @@ namespace meta {
 
         template<typename FieldPolicy>
         consteval FieldSchema getFieldSchema(const std::meta::info type,
-                                          const std::meta::access_context context) {
+                                             const std::meta::access_context context) {
             FieldSchema schema{};
             if (!std::meta::is_class_type(type)) {
                 return schema;
@@ -144,20 +144,19 @@ namespace meta {
 
         static constexpr auto ignoredNames = [] {
             std::array<std::string_view, schema.ignoredFields.size()> result{};
-            [[maybe_unused]] size_t i = 0;
+            [[maybe_unused]] size_t index = 0;
             template for (constexpr auto field: schema.ignoredFields) {
-                result[i++] = std::meta::identifier_of(field);
+                result[index++] = std::meta::identifier_of(field);
             }
             return result;
         }();
 
         static constexpr auto properties = [] {
             std::array<MetaProperty, fieldCount> result{};
-            [[maybe_unused]] size_t i = 0;
-
+            [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
-                    result[i++] = MetaProperty{
+                    result[index++] = MetaProperty{
                         .name = FieldPolicy::project(field).name,
                         .typeName = detail::typeName(std::meta::type_of(field))
                     };
@@ -169,18 +168,17 @@ namespace meta {
 
         template<typename Visitor>
         static constexpr void forEach(const Class &obj, Visitor &&visitor) {
-            [[maybe_unused]] size_t i = 0;
+            [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
-                    const auto &value = obj.[:field:];
-                    visitor(properties[i++], value);
+                    visitor(properties[index++], obj.[:field:]);
                 }
             }
         }
 
         template<typename Visitor>
         static constexpr void forEachMutable(Class &obj, Visitor &&visitor) {
-            [[maybe_unused]] size_t i = 0;
+            [[maybe_unused]] size_t index = 0;
             if constexpr (isValidSchema) {
                 template for (constexpr auto field: fields) {
                     constexpr auto type = std::meta::type_of(field);
@@ -193,7 +191,7 @@ namespace meta {
                     if constexpr (!std::meta::is_reference_type(type)
                                   && !std::meta::is_const_type(type)
                                   && !std::meta::is_bit_field(field)) {
-                        visitor(properties[i++], obj.[:field:]);
+                        visitor(properties[index++], obj.[:field:]);
                     }
                 }
             }

@@ -21,7 +21,7 @@ namespace {
 
 int main() {
     std::stringstream stream(R"({"id": 42, "first_name": "Alice", "salary": 5000.5})");
-    const auto person = rj::toJson(rj::fromJson<Employee>(stream));
-    std::cout << person << '\n';
+    rj::toJson(rj::fromJson<Employee>(stream), std::cout);
+    std::cout << '\n';
     return 0;
 }

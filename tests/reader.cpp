@@ -44,6 +44,14 @@ namespace {
     struct SyntaxAccepted {};
     struct SyntaxProbe { SyntaxProbe() { throw SyntaxAccepted{}; } };
 
+    struct ValidationProbe {
+        static size_t constructions;
+        int id;
+        ValidationProbe() { ++constructions; }
+    };
+
+    size_t ValidationProbe::constructions = 0;
+
     void rejectSyntax(std::string_view input) {
         rejects([&] {
             try { (void) readDocument<SyntaxProbe>(input); }
@@ -54,6 +62,10 @@ namespace {
     void acceptSyntax(std::string_view input) {
         try { (void) readDocument<SyntaxProbe>(input); }
         catch (const SyntaxAccepted &) { ++checks; return; }
+        catch (const rj::JsonError &error) {
+            require(std::string_view(error.what()) == "Expected object", "Unexpected syntax/schema error");
+            return;
+        }
         throw std::runtime_error("Syntax probe constructor was not called");
     }
 
@@ -178,6 +190,12 @@ namespace {
         rejectsValue<Required>(R"({"id":1,"id":2})", "Duplicate object key: id");
         rejectsValue<Required>(R"({"id":1,"\u0069d":2})", "Duplicate object key: id");
         rejectsValue<Required>(R"([1])", "Expected object");
+
+        ValidationProbe::constructions = 0;
+        rejectsValue<ValidationProbe>(R"({"id":"invalid"})", "Expected number");
+        require(ValidationProbe::constructions == 0, "Schema validation precedes target construction");
+        require(readDocument<ValidationProbe>(R"({"id":42})").id == 42, "Valid probe document");
+        require(ValidationProbe::constructions == 1, "Valid document constructs target once");
 
         const auto outer = readDocument<Outer>(R"({"child":{"required":3},"data":[]})");
         require(outer.child.required == 3 && outer.child.keep == 99, "Nested initialization retained");

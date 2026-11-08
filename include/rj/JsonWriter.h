@@ -185,11 +185,15 @@ namespace rj {
     };
 
     template<typename T>
+    void toJson(const T &obj, std::ostream &output, const size_t indent = 2) {
+        JsonWriter(output, indent).write(obj);
+    }
+
+    template<typename T>
     std::string toJson(const T &obj, const size_t indent = 2) {
         std::ostringstream os;
         os.exceptions(std::ios::badbit | std::ios::failbit);
-        JsonWriter writer(os, indent);
-        writer.write(obj);
+        toJson(obj, os, indent);
         return os.str();
     }
 }

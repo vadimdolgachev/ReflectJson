@@ -32,8 +32,9 @@ the experimental compiler explicitly. A top-level build also builds the example.
 ## Usage
 
 ```cpp
-#include <rj/JsonWriter.hpp>
-#include <rj/JsonReader.hpp>
+#include <rj/JsonWriter.h>
+#include <rj/JsonReader.h>
+#include <rj/JsonSchema.h>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -44,6 +45,7 @@ struct Person {
 };
 
 int main() {
+    std::cout << rj::schema<Person>() << '\n';
     const auto text = rj::toJson(Person{42, "Alice"});
     std::istringstream input(text);
     const auto person = rj::fromJson<Person>(input);
@@ -51,9 +53,14 @@ int main() {
 }
 ```
 
-`toJson(value, 0)` produces compact JSON. Field annotations `rj::rename` and
-`rj::ignore` control JSON names and participation. Non-optional fields are required;
-missing optionals retain their defaults. Unknown and duplicate keys are rejected.
+`toJson(value, 0)` and `schema<T>(0)` produce compact JSON. Generated schemas contain
+`type`, `properties`, `items`, and `required` as applicable. Optional fields are omitted
+from `required` and accept `null`.
+
+`fromJson` validates the complete parsed document against the schema inferred from `T`
+before constructing the result. Field annotations `rj::rename` and `rj::ignore` control
+JSON names and participation. Non-optional fields are required; missing optionals retain
+their defaults. Unknown and duplicate keys are rejected.
 
 ## CMake integration
 

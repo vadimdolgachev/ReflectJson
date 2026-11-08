@@ -22,7 +22,7 @@ namespace rj {
         float checkedFloat(double number);
 
         template<typename T, typename Integer>
-        void assignInteger(const Integer number, T &result) {
+        void validateInteger(const Integer number) {
             if constexpr (std::is_signed_v<Integer>) {
                 if constexpr (!std::is_signed_v<T>) {
                     if (number < 0) {
@@ -39,136 +39,193 @@ namespace rj {
                     throw JsonError("Integer out of range for target type");
                 }
             }
-            result = static_cast<T>(number);
         }
 
+        double numberAsDouble(const JsonValue &value);
+
         template<typename T>
-        void readNumber(const JsonValue &value, T &result) {
-            const bool isNumber = value.kind == JsonKind::Int64 || value.kind == JsonKind::UInt64
-                                  || value.kind == JsonKind::Double;
+        void validateNumber(const JsonValue &value) {
+            const bool isNumber = value.getKind() == JsonKind::Int64
+                                  || value.getKind() == JsonKind::UInt64
+                                  || value.getKind() == JsonKind::Double;
             if (!isNumber) {
                 throw JsonError("Expected number");
             }
             if constexpr (std::is_integral_v<T>) {
-                switch (value.kind) {
+                switch (value.getKind()) {
                     case JsonKind::Int64:
-                        detail::assignInteger(value.signedNumber, result);
+                        detail::validateInteger<T>(value.asInt64());
                         break;
                     case JsonKind::UInt64:
-                        detail::assignInteger(value.unsignedNumber, result);
+                        detail::validateInteger<T>(value.asUInt64());
                         break;
                     default:
                         throw JsonError("Expected an integer value");
                 }
             } else {
-                double number{};
-                switch (value.kind) {
-                    case JsonKind::Int64:
-                        number = static_cast<double>(value.signedNumber);
-                        break;
-                    case JsonKind::UInt64:
-                        number = static_cast<double>(value.unsignedNumber);
-                        break;
-                    default:
-                        number = value.floatingNumber;
-                        break;
-                }
                 if constexpr (std::is_same_v<T, float>) {
-                    result = checkedFloat(number);
+                    static_cast<void>(checkedFloat(numberAsDouble(value)));
                 } else {
                     static_assert(std::numeric_limits<T>::digits >= std::numeric_limits<double>::digits
                                   && std::numeric_limits<T>::max_exponent >= std::numeric_limits<double>::max_exponent,
                                   "JsonReader: unsupported floating-point type");
-                    result = static_cast<T>(number);
                 }
             }
         }
 
         template<typename T>
-        void readValue(const JsonValue &value, T &result) {
+        void readNumber(const JsonValue &value, T &result) {
+            if constexpr (std::is_integral_v<T>) {
+                if (value.getKind() == JsonKind::Int64) {
+                    result = static_cast<T>(value.asInt64());
+                } else {
+                    result = static_cast<T>(value.asUInt64());
+                }
+            } else {
+                result = static_cast<T>(numberAsDouble(value));
+            }
+        }
+
+        template<typename T>
+        void validateJson(const JsonValue &json) {
             using Value = std::remove_cv_t<T>;
             static_assert(!std::is_const_v<T>, "JsonReader does not support const targets");
             if constexpr (std::is_same_v<Value, std::nullptr_t>) {
-                if (value.kind != JsonKind::Null) {
+                if (json.getKind() != JsonKind::Null) {
                     throw JsonError("Expected null");
                 }
-                result = nullptr;
             } else if constexpr (std::is_same_v<Value, bool>) {
-                if (value.kind != JsonKind::Boolean) {
+                if (json.getKind() != JsonKind::Boolean) {
                     throw JsonError("Expected boolean");
                 }
-                result = value.boolean;
             } else if constexpr (std::is_integral_v<Value> || std::is_floating_point_v<Value>) {
-                detail::readNumber(value, result);
+                detail::validateNumber<Value>(json);
             } else if constexpr (std::is_same_v<Value, std::string>) {
-                if (value.kind != JsonKind::String) {
+                if (json.getKind() != JsonKind::String) {
                     throw JsonError("Expected string");
                 }
-                result = value.text;
             } else if constexpr (std::is_same_v<Value, std::string_view>) {
                 static_assert(false, "JsonReader does not support std::string_view targets");
             } else if constexpr (is_json_optional<Value>) {
-                if (value.kind == JsonKind::Null) {
-                    result.reset();
+                if (json.getKind() != JsonKind::Null) {
+                    detail::validateJson<typename Value::value_type>(json);
+                }
+            } else if constexpr (is_json_array<Value>) {
+                if (json.getKind() != JsonKind::Array) {
+                    throw JsonError("Expected array");
+                }
+                const auto &elements = json.asArray();
+                if constexpr (std::is_array_v<Value>) {
+                    if (elements.size() != std::extent_v<Value>) {
+                        throw JsonError("Fixed array length mismatch");
+                    }
+                } else if constexpr (!is_vector<Value>) {
+                    if (elements.size() != std::tuple_size_v<Value>) {
+                        throw JsonError("Fixed array length mismatch");
+                    }
+                }
+                for (const auto &element: elements) {
+                    if constexpr (std::is_array_v<Value>) {
+                        detail::validateJson<std::remove_extent_t<Value> >(element);
+                    } else {
+                        detail::validateJson<typename Value::value_type>(element);
+                    }
+                }
+            } else if constexpr (std::is_class_v<Value>) {
+                if (json.getKind() != JsonKind::Object) {
+                    throw JsonError("Expected object");
+                }
+                std::unordered_map<std::string_view, const JsonMember *> remaining;
+                const auto &members = json.asMembers();
+                for (const auto &member: members) {
+                    remaining.emplace(member.name, &member);
+                }
+                size_t index = 0;
+                template for (constexpr auto field: JsonMetaClass<Value>::fields) {
+                    using Field = [:std::meta::type_of(field):];
+                    const auto &property = JsonMetaClass<Value>::properties[index++];
+                    const auto found = remaining.find(property.name);
+                    if (found == remaining.end()) {
+                        if constexpr (!is_json_optional<std::remove_cvref_t<Field> >) {
+                            throw JsonError("Missing required field: " + std::string(property.name));
+                        }
+                    } else {
+                        detail::validateJson<Field>(found->second->value);
+                        remaining.erase(found);
+                    }
+                }
+                for (const auto name: JsonMetaClass<Value>::ignoredNames) {
+                    remaining.erase(name);
+                }
+                for (const auto &[name, _]: members) {
+                    if (remaining.contains(name)) {
+                        throw JsonError("Unknown field: " + name);
+                    }
+                }
+            } else {
+                static_assert(false, "JsonReader: unsupported type");
+            }
+        }
+
+        template<typename T, typename Json>
+        void populateValue(Json &&json, T &value) {
+            using Value = std::remove_cvref_t<T>;
+            static_assert(!std::is_const_v<T>, "JsonReader does not support const targets");
+            if constexpr (std::is_same_v<Value, std::nullptr_t>) {
+                value = nullptr;
+            } else if constexpr (std::is_same_v<Value, bool>) {
+                value = json.boolean;
+            } else if constexpr (std::is_integral_v<Value> || std::is_floating_point_v<Value>) {
+                detail::readNumber(json, value);
+            } else if constexpr (std::is_same_v<Value, std::string>) {
+                value = std::forward<Json>(json).asString();
+            } else if constexpr (std::is_same_v<Value, std::string_view>) {
+                static_assert(false, "JsonReader does not support std::string_view targets");
+            } else if constexpr (is_json_optional<Value>) {
+                if (json.kind == JsonKind::Null) {
+                    value.reset();
                 } else {
                     static_assert(std::is_default_constructible_v<typename Value::value_type>,
                                   "JsonReader requires default-constructible optional values");
-                    if (!result) {
-                        result.emplace();
+                    if (!value) {
+                        value.emplace();
                     }
-                    detail::readValue(value, *result);
+                    detail::populateValue(std::forward<Json>(json), *value);
                 }
             } else if constexpr (is_json_array<Value>) {
-                if (value.kind != JsonKind::Array) {
-                    throw JsonError("Expected array");
-                }
                 if constexpr (is_vector<Value>) {
                     using Element = Value::value_type;
                     static_assert(std::is_default_constructible_v<Element>,
                                   "JsonReader requires default-constructible vector elements");
-                    result.clear();
-                    result.reserve(value.elements.size());
-                    for (const auto &element: value.elements) {
+                    value.clear();
+                    value.reserve(json.elements.size());
+                    for (auto &&element: json.elements) {
                         Element item{};
-                        detail::readValue(element, item);
-                        result.push_back(std::move_if_noexcept(item));
+                        detail::populateValue(std::forward<Json>(element), item);
+                        value.push_back(std::move_if_noexcept(item));
                     }
                 } else {
-                    if (value.elements.size() != std::size(result)) {
-                        throw JsonError("Fixed array length mismatch");
-                    }
-                    auto item = value.elements.begin();
-                    for (auto &element: result) {
-                        detail::readValue(*item++, element);
+                    auto item = json.elements.begin();
+                    for (auto &element: value) {
+                        detail::populateValue(std::forward<Json>(*item), element);
+                        ++item;
                     }
                 }
             } else if constexpr (std::is_class_v<Value>) {
-                if (value.kind != JsonKind::Object) {
-                    throw JsonError("Expected object");
+                using Member = std::conditional_t<
+                    std::is_const_v<std::remove_reference_t<Json> >,
+                    const JsonMember,
+                    JsonMember>;
+                std::unordered_map<std::string_view, Member *> members;
+                for (auto &member: json.asMembers()) {
+                    members.emplace(member.name, &member);
                 }
-                std::unordered_map<std::string_view, const JsonMember *> remaining;
-                for (const auto &member: value.members) {
-                    remaining.emplace(member.name, &member);
-                }
-                JsonMetaClass<Value>::forEachMutable(result, [&](const auto &property, auto &field) {
-                    const auto found = remaining.find(property.name);
-                    if (found == remaining.end()) {
-                        if constexpr (!is_json_optional<std::remove_cvref_t<decltype(field)> >) {
-                            throw JsonError("Missing required field: " + std::string(property.name));
-                        }
-                    } else {
-                        detail::readValue(found->second->value, field);
-                        remaining.erase(found);
+                JsonMetaClass<Value>::forEachMutable(value, [&](const auto &property, auto &field) {
+                    auto found = members.find(property.name);
+                    if (found != members.end()) {
+                        detail::populateValue(std::forward<Json>(found->second->value), field);
                     }
                 });
-                for (const auto name: JsonMetaClass<Value>::ignoredNames) {
-                    remaining.erase(name);
-                }
-                for (const auto &member: value.members) {
-                    if (remaining.contains(member.name)) {
-                        throw JsonError("Unknown field: " + member.name);
-                    }
-                }
             } else {
                 static_assert(false, "JsonReader: unsupported type");
             }
@@ -182,13 +239,25 @@ namespace rj {
         static_assert(std::is_default_constructible_v<T>, "JsonReader requires a default-constructible target");
         static_assert(std::is_move_constructible_v<T> || std::is_copy_constructible_v<T>,
                       "JsonReader requires a copyable or movable target");
-        const auto value = detail::readDocument(input);
+
+        auto jsonVal = detail::readDocument(input);
+        detail::validateJson<T>(jsonVal);
         T result{};
-        detail::readValue(value, result);
+        detail::populateValue(std::move(jsonVal), result);
         if constexpr (std::is_move_constructible_v<T>) {
             return result;
         } else {
             return static_cast<const T &>(result);
         }
+    }
+
+    template<typename T>
+    void fromJson(std::istream &input, T &result) {
+        static_assert(!std::is_reference_v<T> && !std::is_const_v<T> && !std::is_array_v<T>,
+                      "JsonReader requires a mutable value target (use std::array for root arrays)");
+
+        const auto jsonVal = detail::readDocument(input);
+        detail::validateJson<T>(jsonVal);
+        detail::populateValue(std::move(jsonVal), result);
     }
 }
