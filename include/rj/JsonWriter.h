@@ -179,7 +179,7 @@ namespace rj {
                 );
                 endObject();
             } else if constexpr (std::is_enum_v<ValueT>) {
-                if (const auto text = meta::MetaEnum<ValueT>::toString(value)) {
+                if (const auto text = detail::JsonMetaEnum<ValueT>::toString(value)) {
                     writeString(*text);
                 } else {
                     throw std::domain_error("JsonWriter: Enum not found");

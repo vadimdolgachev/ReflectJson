@@ -71,7 +71,7 @@ namespace rj {
                 }
                 writer.endArray();
             } else if constexpr (std::is_enum_v<Value>) {
-                using Meta = meta::MetaEnum<Value>;
+                using Meta = JsonMetaEnum<Value>;
                 if constexpr (Meta::enumerators.empty()) {
                     if (nullable) {
                         writeSchemaType(writer, "null", false);
@@ -82,8 +82,8 @@ namespace rj {
                 } else {
                     writeSchemaType(writer, "string", nullable);
                     writer.beginArray("enum");
-                    for (const auto name: Meta::properties) {
-                        writer.write(name);
+                    template for (constexpr auto entity: Meta::enumerators) {
+                        writer.write(Meta::toString([:entity:]));
                     }
                     if (nullable) {
                         writer.write(nullptr);

@@ -18,8 +18,8 @@ namespace {
         std::string password;
 
         enum class State {
-            Hired,
-            Fired
+            Hired [[= rj::rename("hired")]],
+            Fired [[= rj::rename("fired")]]
         };
 
         State state;
@@ -27,7 +27,7 @@ namespace {
 }
 
 int main() {
-    std::stringstream stream(R"({"state": "Hired", "id": 42, "first_name": "Alice", "salary": 5000.5})");
+    std::stringstream stream(R"({"state": "hired", "id": 42, "first_name": "Alice", "salary": 5000.5})");
     auto employee = rj::fromJson<Employee>(stream);
     std::stringstream stream2(R"({"id": 43})");
     rj::mergePatch(stream2, employee);

@@ -166,7 +166,7 @@ namespace rj {
                 if (json.getKind() != JsonKind::String) {
                     throw JsonError("Expected string");
                 }
-                if (!meta::MetaEnum<Value>::fromString(json.asString())) {
+                if (!JsonMetaEnum<Value>::fromString(json.asString())) {
                     throw JsonError("Enum not found: " + json.asString());
                 }
             } else {
@@ -235,7 +235,7 @@ namespace rj {
                     }
                 });
             } else if constexpr (std::is_enum_v<Value>) {
-                if (const auto parsed = meta::MetaEnum<Value>::fromString(json.asString())) {
+                if (const auto parsed = JsonMetaEnum<Value>::fromString(json.asString())) {
                     value = *parsed;
                 } else {
                     throw JsonError("Unknown enum value: " + json.asString());

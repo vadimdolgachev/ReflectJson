@@ -68,7 +68,7 @@ namespace meta {
             std::string_view error{};
         };
 
-        struct FullFieldPolicy final {
+        struct DefaultFieldPolicy final {
             static constexpr std::string_view DuplicateNameMessage = "MetaClass requires unique data member names";
 
             static consteval FieldProjection project(const std::meta::info field) {
@@ -150,20 +150,20 @@ namespace meta {
         }
     }
 
-    template<typename T>
+    template<typename T, typename FieldPolicy = detail::DefaultFieldPolicy>
     class MetaEnum final {
         using Enum = std::remove_cvref_t<T>;
         static_assert(std::is_enum_v<Enum>, "MetaEnum requires an enum type");
 
+    public:
         static constexpr auto enumerators = std::define_static_array(
             std::meta::enumerators_of(^^Enum)
         );
 
-    public:
         [[nodiscard]] static constexpr
         std::optional<Enum> fromString(std::string_view name) noexcept {
             template for (constexpr auto entity: enumerators) {
-                if (name == std::meta::identifier_of(entity)) {
+                if (FieldPolicy::project(entity).name == name) {
                     return [:entity:];
                 }
             }
@@ -174,14 +174,14 @@ namespace meta {
         std::optional<std::string_view> toString(Enum value) noexcept {
             template for (constexpr auto entity: enumerators) {
                 if (value == [:entity:]) {
-                    return std::meta::identifier_of(entity);
+                    return FieldPolicy::project(entity).name;
                 }
             }
             return std::nullopt;
         }
     };
 
-    template<typename T, typename FieldPolicy = detail::FullFieldPolicy>
+    template<typename T, typename FieldPolicy = detail::DefaultFieldPolicy>
     struct MetaClass final {
         using Class = std::remove_cvref_t<T>;
         static_assert(std::is_class_v<Class>, "MetaClass requires a class type");

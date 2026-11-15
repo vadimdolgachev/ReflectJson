@@ -29,4 +29,7 @@ namespace rj::detail {
 
     template<typename T>
     using JsonMetaClass = meta::MetaClass<T, JsonFieldPolicy>;
+
+    template<typename T>
+    using JsonMetaEnum = meta::MetaEnum<T, JsonFieldPolicy>;
 }
