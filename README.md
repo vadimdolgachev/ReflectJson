@@ -5,6 +5,7 @@ and types. Signatures omit template declarations; `T` denotes the converted type
 `E` an enum type.
 
 ```cpp
+#include <rj/Annotations.h>
 #include <rj/JsonReader.h>
 #include <rj/JsonSchema.h>
 #include <rj/JsonWriter.h>
@@ -21,7 +22,10 @@ struct Person {
     std::string name;
 };
 
-enum class State { Hired, Fired, Alias = Hired };
+enum class State {
+    Hired [[= rj::rename{"hired"}]],
+    Fired [[= rj::rename{"fired"}]]
+};
 ```
 
 ## JSON API
@@ -32,10 +36,16 @@ enum class State { Hired, Fired, Alias = Hired };
 
 Serializes `value` and returns its JSON text. `indent` sets spaces per nesting level;
 `0` selects compact output. Values that cannot be represented throw `std::domain_error`.
+Enum values use their JSON names. An `rj::rename` annotation on an enumerator
+replaces its C++ name in JSON output.
 
 ```cpp
 const auto text = rj::toJson(Person{42, "Alice"}, 0);
 std::cout << text; // {"id":42,"name":"Alice"}
+```
+
+```cpp
+std::cout << rj::toJson(State::Hired, 0); // "hired"
 ```
 
 ### toJson: write to a stream
@@ -61,11 +71,19 @@ constructs `T{}` and fills its fields. `T` must be a mutable value type, default
 constructible and copyable or movable. Non-optional fields are required even when
 they have initializers; absent optionals retain their defaults. Duplicate and
 unknown keys are errors. JSON, type-validation, and I/O failures throw `rj::JsonError`.
+Renamed enumerators are matched by their JSON names; the original C++ identifier
+is not an additional input alias.
 
 ```cpp
 std::istringstream input(R"({"id":42,"name":"Alice"})");
 const auto person = rj::fromJson<Person>(input);
 std::cout << person.name; // Alice
+```
+
+```cpp
+std::istringstream input(R"("hired")");
+const auto state = rj::fromJson<State>(input);
+std::cout << (state == State::Hired); // 1
 ```
 
 ### fromJson: update an object
@@ -93,6 +111,7 @@ unchanged, nested objects are patched recursively, and arrays are replaced as wh
 values. `null` clears an optional; other targets accept it only for `std::nullptr_t`.
 Unknown fields are rejected. Parsing and validation finish before population begins;
 invalid JSON or field values throw `rj::JsonError`.
+Enum values follow the same naming rules as `fromJson`, including `rj::rename`.
 
 ```cpp
 Person person{42, "Alice"};
@@ -114,10 +133,12 @@ rejection; these constraints are not emitted by this function.
 ```cpp
 const auto text = rj::schema<std::optional<State>>(0);
 std::cout << text;
-// {"type":["string","null"],"enum":["Hired","Fired","Alias",null]}
+// {"type":["string","null"],"enum":["hired","fired",null]}
 ```
 
-Enum schemas include every declared name. An empty enum has schema `{"not":{}}`;
+Enum schemas use the JSON spelling of enumerator values, including `rj::rename`.
+For aliases sharing a value, serialization and schema entries use the first declared
+enumerator's JSON name. An empty enum has schema `{"not":{}}`;
 an optional empty enum has schema `{"type":"null"}`.
 
 ## Reflection and enum API
@@ -125,6 +146,9 @@ an optional empty enum has schema `{"type":"null"}`.
 Header: `<rj/MetaClass.h>`. `MetaClass<T>` visits the static class type, with public
 bases first and then its own fields. Generic metadata includes fields marked
 `rj::ignore` and uses C++ member names; JSON conversion applies annotations separately.
+Similarly, `meta::MetaEnum<E>` uses C++ enumerator names by default and does not apply
+`rj::rename`. Both metadata templates accept an optional `FieldPolicy` parameter
+for name projection; the JSON API selects its annotation-aware policy internally.
 
 ### forEach
 
@@ -158,30 +182,39 @@ meta::MetaClass<Person>::forEachMutable(person, [](const auto &, auto &field) {
 
 ### MetaEnum::fromString
 
-`[[nodiscard]] static constexpr std::optional<Enum> meta::MetaEnum<E>::fromString(std::string_view name) noexcept`
+`[[nodiscard]] static constexpr std::optional<std::remove_cvref_t<E>> meta::MetaEnum<E>::fromString(std::string_view name) noexcept`
 
-Returns the enumerator matching `name` exactly, or `std::nullopt`. `Enum` is `E`
-without cv/ref qualifiers. All declared aliases are accepted; an empty enum never
-matches. No destination object is modified.
+Returns the enumerator matching `name` exactly, or `std::nullopt`. The returned
+enum type is `E` without cv/ref qualifiers.
+With the default policy, all declared C++ aliases are accepted and JSON rename
+annotations are ignored. An empty enum never matches. No destination object is modified.
 
 ```cpp
-constexpr auto state = meta::MetaEnum<State>::fromString("Alias");
+constexpr auto state = meta::MetaEnum<State>::fromString("Hired");
 static_assert(state == State::Hired);
+static_assert(!meta::MetaEnum<State>::fromString("hired"));
 static_assert(!meta::MetaEnum<State>::fromString("Unknown"));
 ```
 
 ### MetaEnum::toString
 
-`[[nodiscard]] static constexpr std::optional<std::string_view> meta::MetaEnum<E>::toString(Enum value) noexcept`
+`[[nodiscard]] static constexpr std::optional<std::string_view> meta::MetaEnum<E>::toString(std::remove_cvref_t<E> value) noexcept`
 
 Returns the first declared name for `value`, including when several enumerators
-share a value. A value without a declared name returns `std::nullopt`. Returned
-views refer to reflection-provided text with static storage.
+share a value. The default policy returns the C++ name even when `rj::rename` is
+present. A value without a declared name returns `std::nullopt`. Returned views
+refer to static name storage.
 
 ```cpp
-constexpr auto name = meta::MetaEnum<State>::toString(State::Alias);
+constexpr auto name = meta::MetaEnum<State>::toString(State::Hired);
 static_assert(name == "Hired");
 static_assert(!meta::MetaEnum<State>::toString(static_cast<State>(99)));
+```
+
+```cpp
+enum class Aliased { First, Alias = First };
+static_assert(meta::MetaEnum<Aliased>::fromString("Alias") == Aliased::First);
+static_assert(meta::MetaEnum<Aliased>::toString(Aliased::Alias) == "First");
 ```
 
 ## Metadata utilities
@@ -194,7 +227,6 @@ Header: `<rj/MetaClass.h>`. The cached metadata is available without an object.
 | `MetaClass<T>::fieldCount` | Number of fields in that metadata view. |
 | `MetaClass<T>::properties` | Cached `MetaProperty` values in field order. |
 | `MetaEnum<E>::enumerators` | Reflection descriptors for every declared enumerator. |
-| `MetaEnum<E>::properties` | Enumerator names in declaration order. |
 | `MetaProperty::name`, `typeName` | Non-owning string views for a field's name and type. |
 | `StaticStrView::data`, `size` | Pointer and length of a text view descriptor. |
 
