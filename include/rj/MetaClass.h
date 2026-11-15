@@ -151,7 +151,7 @@ namespace meta {
     }
 
     template<typename T>
-    struct MetaEnum final {
+    class MetaEnum final {
         using Enum = std::remove_cvref_t<T>;
         static_assert(std::is_enum_v<Enum>, "MetaEnum requires an enum type");
 
@@ -159,16 +159,9 @@ namespace meta {
             std::meta::enumerators_of(^^Enum)
         );
 
-        static constexpr auto properties = [] {
-            std::array<std::string_view, enumerators.size()> result{};
-            std::size_t index = 0;
-            template for (constexpr auto enumerator: enumerators) {
-                result[index++] = std::meta::identifier_of(enumerator);
-            }
-            return result;
-        }();
-
-        [[nodiscard]] static constexpr std::optional<Enum> fromString([[maybe_unused]] std::string_view name) noexcept {
+    public:
+        [[nodiscard]] static constexpr
+        std::optional<Enum> fromString(std::string_view name) noexcept {
             template for (constexpr auto entity: enumerators) {
                 if (name == std::meta::identifier_of(entity)) {
                     return [:entity:];
@@ -177,7 +170,8 @@ namespace meta {
             return std::nullopt;
         }
 
-        [[nodiscard]] static constexpr std::optional<std::string_view> toString([[maybe_unused]] Enum value) noexcept {
+        [[nodiscard]] static constexpr
+        std::optional<std::string_view> toString(Enum value) noexcept {
             template for (constexpr auto entity: enumerators) {
                 if (value == [:entity:]) {
                     return std::meta::identifier_of(entity);
@@ -190,12 +184,10 @@ namespace meta {
     template<typename T, typename FieldPolicy = detail::FullFieldPolicy>
     struct MetaClass final {
         using Class = std::remove_cvref_t<T>;
-
         static_assert(std::is_class_v<Class>, "MetaClass requires a class type");
 
-        static constexpr auto context = std::meta::access_context::current();
-
     private:
+        static constexpr auto context = std::meta::access_context::current();
         static constexpr auto schema = detail::getFieldSchema<FieldPolicy>(^^Class, context);
         static constexpr bool isValidSchema = schema.isPublicBases
                                               && schema.isAccessibleFields
